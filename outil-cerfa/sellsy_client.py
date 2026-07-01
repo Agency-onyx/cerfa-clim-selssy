@@ -180,24 +180,32 @@ def _rows(detail):
     return [r for r in items if isinstance(r, dict) and r.get("type") == "item"]
 
 
-def _client_infos(detail, fiche):
-    """Construit les infos client depuis la facture + la fiche client."""
-    contact = (fiche or {}).get("contact", {}) or {}
-    corp = (fiche or {}).get("corporation", {}) or {}
-    adresses = (fiche or {}).get("address", []) or []
-    adr = adresses[0] if adresses else {}
+CIVILITES = {"m", "m.", "mr", "mr.", "mme", "mme.", "mlle", "melle", "mlle."}
 
-    # nom / prenom : contact pour un particulier, corporation pour une societe
-    prenom = contact.get("forename", "")
-    nom = contact.get("name") or corp.get("name", "")
-    civ = CIVIL.get((contact.get("civil") or "").lower(), "")
 
-    # adresse : depuis la fiche, sinon depuis la facture
+def _split_nom(nom_complet):
+    """'M Mohand BOUKHEZER' -> (prenom='Mohand', nom='BOUKHEZER')."""
+    tokens = (nom_complet or "").split()
+    if tokens and tokens[0].lower() in CIVILITES:
+        tokens = tokens[1:]
+    if not tokens:
+        return "", ""
+    if len(tokens) == 1:
+        return "", tokens[0]
+    return tokens[0], " ".join(tokens[1:])
+
+
+def _client_infos(detail):
+    """
+    Construit les infos client A PARTIR DE LA FACTURE UNIQUEMENT.
+    (Toutes les donnees necessaires sont deja dans Document.getOne : plus besoin
+    d'un appel Client.getOne par facture, ce qui evitait les timeouts.)
+    """
     thirdadr = detail.get("thirdAddress", {}) or {}
-    rue = adr.get("part1") or thirdadr.get("part1", "")
-    part2 = adr.get("part2") or thirdadr.get("part2", "")
-    cp = adr.get("zip") or thirdadr.get("zip", "")
-    ville = adr.get("town") or thirdadr.get("town", "")
+    rue = thirdadr.get("part1", "")
+    part2 = thirdadr.get("part2", "")
+    cp = thirdadr.get("zip", "")
+    ville = thirdadr.get("town", "")
     if not ville:
         # extraction depuis "95100 Argenteuil"
         for p in thirdadr.get("partsToDisplay", []):
@@ -206,9 +214,14 @@ def _client_infos(detail, fiche):
                 ville = m.group(1).strip()
 
     rue_complete = " ".join(x for x in [rue, part2] if x).strip()
-    intitule = detail.get("thirdName") or detail.get("contactName") \
-        or " ".join(x for x in [civ, prenom, nom] if x).strip()
+    intitule = detail.get("thirdName") or detail.get("contactName") or ""
     siret = detail.get("thirdSiret", "")
+
+    # nom / prenom pour le 1301
+    if detail.get("thirdType") == "corporation":
+        prenom, nom = "", (intitule or "").strip()
+    else:
+        prenom, nom = _split_nom(detail.get("contactName") or intitule)
 
     lignes_bloc = [intitule, rue_complete, f"{cp} {ville}".strip()]
     if siret:
@@ -241,9 +254,6 @@ def factures_a_traiter(cfg, date_debut, date_fin):
         produits_ge = [_nom_produit(r) for r in _rows(detail)
                        if contient_groupe_exterieur(_nom_produit(r))]
 
-        thirdid = detail.get("thirdid")
-        fiche = detail_client(cfg, thirdid) if thirdid else {}
-
         date_aff = detail.get("displayedDate") or f.get("displayedDate") or ""
         if str(date_aff).isdigit():
             date_aff = datetime.fromtimestamp(int(date_aff)).strftime("%d/%m/%Y")
@@ -251,7 +261,7 @@ def factures_a_traiter(cfg, date_debut, date_fin):
         resultats.append({
             "ref": detail.get("ident") or f.get("ident") or str(docid),
             "date": date_aff,
-            "client": _client_infos(detail, fiche),
+            "client": _client_infos(detail),
             "produits_groupe_ext": produits_ge,
         })
     return resultats
