@@ -32,7 +32,7 @@ def generer(date_debut, date_fin, log=print, dossier=None):
         dossier = Path(dossier)
 
     log(f"Connexion a Sellsy, factures du {date_debut} au {date_fin}...")
-    factures = sellsy_client.factures_a_traiter(cfg, date_debut, date_fin)
+    factures = sellsy_client.factures_a_traiter(cfg, date_debut, date_fin, log=log)
     log(f"{len(factures)} facture(s) trouvee(s).")
 
     fichiers = []
