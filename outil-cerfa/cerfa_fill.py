@@ -56,6 +56,12 @@ def _ecrire(modele: Path, valeurs_texte: dict, sortie: Path):
             if w.field_type_string == "Text" and w.field_name in valeurs_texte:
                 val = valeurs_texte[w.field_name]
                 w.field_value = "" if val is None else str(val)
+                # Ajuste la police pour les cases courtes (ex. cases de date) afin
+                # que le texte ne soit pas rogne par certains lecteurs PDF.
+                fs = w.text_fontsize or 7
+                limite = w.rect.height * 0.6
+                if limite and fs > limite:
+                    w.text_fontsize = max(4.0, round(limite, 1))
                 w.update()
     sortie.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(sortie))
