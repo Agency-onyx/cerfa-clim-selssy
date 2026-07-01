@@ -1,0 +1,11 @@
+{
+  "sellsy": {
+    "consumer_token": "COLLER_ICI",
+    "consumer_secret": "COLLER_ICI",
+    "user_token": "COLLER_ICI",
+    "user_secret": "COLLER_ICI"
+  },
+  "dossier_sortie": "./CERFA",
+  "generer_1301": true,
+  "generer_15497": true
+}
