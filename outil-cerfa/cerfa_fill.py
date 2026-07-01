@@ -47,22 +47,35 @@ def contient_groupe_exterieur(nom_produit: str) -> bool:
     return MOT_CLE_PRODUIT in _sans_accents(nom_produit)
 
 
-def _ecrire(modele: Path, valeurs_texte: dict, sortie: Path):
-    """Ecrit des champs texte dans un PDF a formulaire, laisse les cases vides,
-    garde le document modifiable."""
+def _ecrire(modele: Path, valeurs_texte: dict, sortie: Path, fixe: dict = None):
+    """
+    Ecrit dans un PDF a formulaire.
+    - valeurs_texte : rempli comme champ de formulaire (reste editable).
+    - fixe : {nom_champ: texte} rendu en TEXTE FIXE imprime sur la page,
+      centre dans la case du champ (le champ est retire). Utile pour les cases
+      trop courtes (dates) qui sont rognees par certains lecteurs PDF.
+    Les cases a cocher restent vides.
+    """
+    fixe = fixe or {}
     doc = fitz.open(str(modele))
     for page in doc:
-        for w in (page.widgets() or []):
-            if w.field_type_string == "Text" and w.field_name in valeurs_texte:
+        a_dessiner = []
+        for w in list(page.widgets() or []):
+            if w.field_name in fixe:
+                a_dessiner.append((str(fixe[w.field_name] or ""), fitz.Rect(w.rect)))
+                page.delete_widget(w)
+            elif w.field_type_string == "Text" and w.field_name in valeurs_texte:
                 val = valeurs_texte[w.field_name]
                 w.field_value = "" if val is None else str(val)
-                # Ajuste la police pour les cases courtes (ex. cases de date) afin
-                # que le texte ne soit pas rogne par certains lecteurs PDF.
-                fs = w.text_fontsize or 7
-                limite = w.rect.height * 0.6
-                if limite and fs > limite:
-                    w.text_fontsize = max(4.0, round(limite, 1))
                 w.update()
+        for texte, rect in a_dessiner:
+            if not texte:
+                continue
+            fs = 7.0
+            larg = fitz.get_text_length(texte, fontname="helv", fontsize=fs)
+            x = rect.x0 + max(0, (rect.width - larg) / 2)
+            y = rect.y0 + rect.height / 2 + fs * 0.35  # centrage vertical (baseline)
+            page.insert_text((x, y), texte, fontsize=fs, fontname="helv")
     sortie.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(sortie))
     doc.close()
@@ -96,11 +109,11 @@ def remplir_15497(client: dict, date_facture: str, nom_produit: str, sortie: Pat
     valeurs.update({
         "Detenteur": client.get("bloc", ""),
         "Equipement_ID": nom_produit,
-        "Controle_Jour": jj,
-        "Controle_Mois": mm,
-        "Controle_Annee": aaaa,
     })
-    return _ecrire(MODELE_15497, valeurs, sortie)
+    # La date (cases courtes) est imprimee en texte fixe pour un rendu identique
+    # dans tous les lecteurs PDF.
+    fixe = {"Controle_Jour": jj, "Controle_Mois": mm, "Controle_Annee": aaaa}
+    return _ecrire(MODELE_15497, valeurs, sortie, fixe=fixe)
 
 
 # ---------------------------------------------------------------------------
