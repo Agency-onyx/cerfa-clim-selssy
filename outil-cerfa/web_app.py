@@ -52,8 +52,23 @@ PAGE = """
   @keyframes spin{to{transform:rotate(360deg)}}
   #overlay h2{font-size:20px;margin:0 0 8px}
   #chrono{color:#5a6b8c;font-size:15px}
+  .entete{text-align:center;margin-bottom:8px}
+  .entete svg{width:64px;height:64px}
+  footer{text-align:center;margin-top:28px;color:#8794ab;font-size:14px}
+  footer a{color:#1e63d6;text-decoration:none;font-weight:600}
+  footer a:hover{text-decoration:underline}
 </style></head>
 <body>
+  <div class="entete">
+    <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="climatisation">
+      <rect x="6" y="12" width="52" height="22" rx="5" fill="#eaf1fc" stroke="#1e63d6" stroke-width="2.5"/>
+      <line x1="11" y1="20" x2="53" y2="20" stroke="#1e63d6" stroke-width="2"/>
+      <rect x="11" y="26" width="42" height="4" rx="2" fill="#1e63d6"/>
+      <path d="M18 41c0 4 5 4 5 8" stroke="#4a90e2" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M31 41c0 4 5 4 5 8" stroke="#4a90e2" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M44 41c0 4 5 4 5 8" stroke="#4a90e2" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+  </div>
   <h1>Generation des CERFA</h1>
   <div class="carte">
     <form id="form" method="post" action="/generer">
@@ -75,6 +90,10 @@ PAGE = """
     <h2>Generation en cours...</h2>
     <div id="chrono">0 s</div>
   </div>
+
+  <footer>
+    Cree par <a href="https://onyx-digital.fr" target="_blank" rel="noopener">onyx-digital.fr</a>
+  </footer>
 
   <script>
     var form=document.getElementById('form');
