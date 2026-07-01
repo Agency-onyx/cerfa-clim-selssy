@@ -19,7 +19,7 @@ import tempfile
 from datetime import date, timedelta
 from pathlib import Path
 
-from flask import Flask, request, send_file, render_template_string
+from flask import Flask, request, send_file, render_template_string, make_response
 
 import core
 
@@ -42,23 +42,66 @@ PAGE = """
   button{margin-top:20px;width:100%;padding:14px;border:0;border-radius:8px;
          background:#1e63d6;color:#fff;font-size:18px;font-weight:700;cursor:pointer}
   button:hover{background:#174fac}
+  button:disabled{background:#9db6e0;cursor:default}
   .info{color:#5a6b8c;font-size:14px;margin-top:16px}
+  #overlay{position:fixed;inset:0;background:rgba(255,255,255,.94);
+           display:none;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px}
+  #overlay.on{display:flex}
+  .spin{width:52px;height:52px;border:5px solid #d7e2f5;border-top-color:#1e63d6;
+        border-radius:50%;animation:spin 1s linear infinite;margin-bottom:20px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #overlay h2{font-size:20px;margin:0 0 8px}
+  #chrono{color:#5a6b8c;font-size:15px}
 </style></head>
 <body>
   <h1>Generation des CERFA</h1>
   <div class="carte">
-    <form method="post" action="/generer">
+    <form id="form" method="post" action="/generer">
       <label for="d1">Du</label>
       <input type="date" id="d1" name="date_debut" value="{{ defaut }}" required>
       <label for="d2">Au</label>
       <input type="date" id="d2" name="date_fin" value="{{ defaut }}" required>
       <label for="mp">Mot de passe</label>
       <input type="password" id="mp" name="motdepasse" required>
-      <button type="submit">Go</button>
+      <input type="hidden" id="token" name="token">
+      <button id="btn" type="submit">Go</button>
     </form>
     <p class="info">Les CERFA des factures de la periode seront prepares
     puis telecharges dans un fichier ZIP. Les cases restent a cocher a la main.</p>
   </div>
+
+  <div id="overlay">
+    <div class="spin"></div>
+    <h2>Generation en cours...</h2>
+    <div id="chrono">0 s</div>
+  </div>
+
+  <script>
+    var form=document.getElementById('form');
+    var overlay=document.getElementById('overlay');
+    var chrono=document.getElementById('chrono');
+    var btn=document.getElementById('btn');
+    form.addEventListener('submit', function(){
+      var token=Math.random().toString(36).slice(2)+Date.now();
+      document.getElementById('token').value=token;
+      overlay.classList.add('on');
+      btn.disabled=true;
+      var start=Date.now();
+      var t=setInterval(function(){
+        chrono.textContent=Math.round((Date.now()-start)/1000)+' s';
+      },1000);
+      // Le serveur pose un cookie 'downloadToken' quand le ZIP part :
+      // des qu'on le detecte, le telechargement a commence, on masque l'ecran.
+      var poll=setInterval(function(){
+        if(document.cookie.indexOf('downloadToken='+token)!==-1){
+          clearInterval(poll);clearInterval(t);
+          overlay.classList.remove('on');
+          btn.disabled=false;
+          document.cookie='downloadToken=; max-age=0; path=/';
+        }
+      },500);
+    });
+  </script>
 </body></html>
 """
 
@@ -95,8 +138,13 @@ def generer():
         buf.seek(0)
 
     nom = f"CERFA_{d1}_au_{d2}.zip"
-    return send_file(buf, mimetype="application/zip",
-                     as_attachment=True, download_name=nom)
+    resp = make_response(send_file(buf, mimetype="application/zip",
+                                   as_attachment=True, download_name=nom))
+    # Signale au navigateur que le telechargement demarre (masque l'ecran d'attente).
+    token = request.form.get("token", "")
+    if token:
+        resp.set_cookie("downloadToken", token, max_age=60, path="/")
+    return resp
 
 
 if __name__ == "__main__":
