@@ -32,6 +32,7 @@ OPERATEUR_DEFAUT = {
     "Attestation_no": "SQ 18115",
     "Sign_Operateur_Nom": "MAXENCE PELUSO",
     "Sign_Operateur_Qualite": "DIRECTEUR",
+    "Sign_Operateur_Date": "MP",   # initiales de l'operateur en bas du document
 }
 
 MOT_CLE_PRODUIT = "groupe exterieur"  # comparaison sans accents / sans casse
@@ -47,13 +48,15 @@ def contient_groupe_exterieur(nom_produit: str) -> bool:
     return MOT_CLE_PRODUIT in _sans_accents(nom_produit)
 
 
-def _ecrire(modele: Path, valeurs_texte: dict, sortie: Path, fixe: dict = None):
+def _ecrire(modele: Path, valeurs_texte: dict, sortie: Path, fixe: dict = None,
+            page1_seulement: bool = False):
     """
     Ecrit dans un PDF a formulaire.
     - valeurs_texte : rempli comme champ de formulaire (reste editable).
     - fixe : {nom_champ: texte} rendu en TEXTE FIXE imprime sur la page,
       centre dans la case du champ (le champ est retire). Utile pour les cases
       trop courtes (dates) qui sont rognees par certains lecteurs PDF.
+    - page1_seulement : ne conserve que la premiere page dans le PDF de sortie.
     Les cases a cocher restent vides.
     """
     fixe = fixe or {}
@@ -76,6 +79,8 @@ def _ecrire(modele: Path, valeurs_texte: dict, sortie: Path, fixe: dict = None):
             x = rect.x0 + max(0, (rect.width - larg) / 2)
             y = rect.y0 + rect.height / 2 + fs * 0.35  # centrage vertical (baseline)
             page.insert_text((x, y), texte, fontsize=fs, fontname="helv")
+    if page1_seulement and doc.page_count > 1:
+        doc.select([0])
     sortie.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(sortie))
     doc.close()
@@ -129,14 +134,11 @@ def remplir_1301(client: dict, date_facture: str, sortie: Path):
         "a3": client.get("adresse", ""),
         "a5": client.get("cp", ""),
         "a4": client.get("commune", ""),
-        # adresse des travaux : identique a l'adresse client par defaut
-        "a7": client.get("adresse", ""),
-        "a8": client.get("commune", ""),
-        "a9": client.get("cp", ""),
+        # 2e paragraphe (nature des locaux) : PAS d'adresse (consigne client).
         "a11": client.get("commune", ""),   # Fait a
         "a12": date_facture,                 # le ...
     }
-    return _ecrire(MODELE_1301, valeurs, sortie)
+    return _ecrire(MODELE_1301, valeurs, sortie, page1_seulement=True)
 
 
 if __name__ == "__main__":
