@@ -48,37 +48,55 @@ def contient_groupe_exterieur(nom_produit: str) -> bool:
     return MOT_CLE_PRODUIT in _sans_accents(nom_produit)
 
 
+def _dessiner_bloc(page, rect, texte, fs=7.0):
+    """Texte multi-lignes cale en haut a gauche dans la case. Reduit la police
+    si necessaire pour tenir. Rendu fixe (identique dans tous les lecteurs PDF)."""
+    zone = fitz.Rect(rect.x0 + 2, rect.y0 + 1, rect.x1 - 1, rect.y1 + 2)
+    while fs >= 4.5:
+        rc = page.insert_textbox(zone, texte, fontsize=fs, fontname="helv", align=0)
+        if rc >= 0:
+            return
+        fs -= 0.5
+    # dernier recours : ecrit quand meme a la plus petite taille
+    page.insert_textbox(zone, texte, fontsize=4.5, fontname="helv", align=0)
+
+
+def _dessiner_centre(page, rect, texte, fs=7.0):
+    """Texte court centre dans la case (ex. cases de date)."""
+    larg = fitz.get_text_length(texte, fontname="helv", fontsize=fs)
+    x = rect.x0 + max(0, (rect.width - larg) / 2)
+    y = rect.y0 + rect.height / 2 + fs * 0.35
+    page.insert_text((x, y), texte, fontsize=fs, fontname="helv")
+
+
 def _ecrire(modele: Path, valeurs_texte: dict, sortie: Path, fixe: dict = None,
             page1_seulement: bool = False):
     """
-    Ecrit dans un PDF a formulaire.
-    - valeurs_texte : rempli comme champ de formulaire (reste editable).
-    - fixe : {nom_champ: texte} rendu en TEXTE FIXE imprime sur la page,
-      centre dans la case du champ (le champ est retire). Utile pour les cases
-      trop courtes (dates) qui sont rognees par certains lecteurs PDF.
-    - page1_seulement : ne conserve que la premiere page dans le PDF de sortie.
-    Les cases a cocher restent vides.
+    Remplit un CERFA.
+    - valeurs_texte : imprime en TEXTE FIXE (multi-lignes) a la place du champ,
+      pour un rendu identique dans tous les lecteurs PDF (evite le rognage de la
+      derniere ligne, ex. le SIRET de l'operateur).
+    - fixe : {nom_champ: texte} imprime en texte fixe CENTRE (cases courtes, dates).
+    - page1_seulement : ne conserve que la premiere page.
+    Seules les cases a cocher restent des champs (a cocher a la main).
     """
     fixe = fixe or {}
     doc = fitz.open(str(modele))
     for page in doc:
-        a_dessiner = []
+        blocs, centres = [], []
         for w in list(page.widgets() or []):
             if w.field_name in fixe:
-                a_dessiner.append((str(fixe[w.field_name] or ""), fitz.Rect(w.rect)))
+                centres.append((str(fixe[w.field_name] or ""), fitz.Rect(w.rect)))
                 page.delete_widget(w)
             elif w.field_type_string == "Text" and w.field_name in valeurs_texte:
-                val = valeurs_texte[w.field_name]
-                w.field_value = "" if val is None else str(val)
-                w.update()
-        for texte, rect in a_dessiner:
-            if not texte:
-                continue
-            fs = 7.0
-            larg = fitz.get_text_length(texte, fontname="helv", fontsize=fs)
-            x = rect.x0 + max(0, (rect.width - larg) / 2)
-            y = rect.y0 + rect.height / 2 + fs * 0.35  # centrage vertical (baseline)
-            page.insert_text((x, y), texte, fontsize=fs, fontname="helv")
+                blocs.append((str(valeurs_texte[w.field_name] or ""), fitz.Rect(w.rect)))
+                page.delete_widget(w)
+        for texte, rect in blocs:
+            if texte:
+                _dessiner_bloc(page, rect, texte)
+        for texte, rect in centres:
+            if texte:
+                _dessiner_centre(page, rect, texte)
     if page1_seulement and doc.page_count > 1:
         doc.select([0])
     sortie.parent.mkdir(parents=True, exist_ok=True)
