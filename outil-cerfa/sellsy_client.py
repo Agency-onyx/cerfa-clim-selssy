@@ -257,7 +257,8 @@ def factures_a_traiter(cfg, date_debut, date_fin, log=None):
 
             # Detection sur le NOM du produit (titre), pas la description complete :
             # evite de capter un "cache clim" dont la description mentionne le groupe exterieur.
-            produits_ge = [_nom_produit(r) for r in _rows(detail)
+            # Valeur mise en reference (IDENTIFICATION) = le CODE produit (colonne Nom/Code).
+            produits_ge = [(r.get("name") or "").strip() for r in _rows(detail)
                            if contient_groupe_exterieur(_nom_produit(r))]
 
             date_aff = detail.get("displayedDate") or f.get("displayedDate") or ""
